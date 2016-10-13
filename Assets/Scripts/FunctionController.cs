@@ -4,104 +4,100 @@ using org.mariuszgromada.math.mxparser;
 
 public class FunctionController : MonoBehaviour {
     public string functionString = "f(x, y)=x^2+y^2";
-    float drawBound = 10;
-    int boundDivisions = 24;
-    public Transform player;
+    public bool refresh;
+    public float bound = 10;
+    public int segments = 24;
+    Mesh mesh;
 
 	// Use this for initialization
 	void Start () {
-	
+        mesh = new Mesh();
+        GetComponent<MeshFilter>().mesh = mesh;
+        BuildMesh(new Function(functionString));
 	}
 	
 	// Update is called once per frame
 	void Update () {
-	
+        if (refresh)
+        {
+            BuildMesh(new Function(functionString));
+            refresh = false;
+        }
 	}
 
-    Mesh GetFunctionMesh(Function function, float segmentLength)
+    void BuildMesh(Function funct)
     {
-        if(function.checkSyntax() == false)
+        if (funct.checkSyntax())
         {
-            return GetErrorMesh(player.localScale.x);
+            mesh.vertices = GetVertices(funct);
+            mesh.SetIndices(GetIndices(funct), MeshTopology.Quads, 0);
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
         }
-        Mesh fMesh = new Mesh();
-        List<Vector3> vertices = new List<Vector3>();
-        List<int> indices = new List<int>();
-        if(function.getArgumentsNumber() == 1)
+        else
         {
-
+            BuildErrorMesh(1);
         }
-        else if(function.getArgumentsNumber() == 2)
+    }
+    Vector3[] GetVertices(Function funct)
+    {
+        Vector3[] verts;
+        int vertsPerAxis = segments + 1;
+        float segmentLength = 2 * bound / segments;
+        if (funct.getArgumentsNumber() == 2)
         {
-            int vertCount;
-            float angleStep;
-            float theta;
-            float radius;
-            float x = 0;
-            float z = 0;
-            float y = (float)function.calculate(x, z);
-            vertices.Add(new Vector3(x, y, z));
-            for (int ring = 1; ring * segmentLength <= drawBound; ring++)
+            verts = new Vector3[vertsPerAxis * vertsPerAxis];
+            for(int i = 0; i < vertsPerAxis; i++)
             {
-                vertCount = Mathf.RoundToInt(2 * Mathf.PI * ring);
-                angleStep = 360 / vertCount;
-                radius = ring * segmentLength;
-                for (int vert = 0; vert < vertCount; vert++)
+                float z = -bound + segmentLength * i;
+                for(int j = 0; j < vertsPerAxis; j++)
                 {
-                    theta = angleStep * vert;
-                    x = Mathf.Cos(theta) * radius;
-                    z = Mathf.Sin(theta) * radius;
-                    y = (float)function.calculate(x, z);
-                    vertices.Add(new Vector3(x, y, z));
+                    float x = -bound + segmentLength * j;
+                    float y = (float)funct.calculate(x, z);
+                    verts[vertsPerAxis * i + j] = new Vector3(x, y, z);
                 }
             }
         }
-        return fMesh;
+        else
+        {
+            verts = null;
+        }
+        return verts;
     }
 
-    List<int> GetIndices(int numRings)
+    int[] GetIndices(Function funct)
     {
-        List<int> indices = new List<int>();
-        indices.Add(0);
-        for(int ring = 1; ring < numRings - 1; ring++)
+        int[] indices;
+        if(funct.getArgumentsNumber() == 2)
         {
-            /*float outTrisPerVert = (float)ringVertCount / prevRingVertCount;
-            float outTris = 0;
-            for(int vert = 0; vert < ringVertCount; vert++)
+            indices = new int[4 * segments * segments];
+            for(int i = 0; i < segments; i++)
             {
-                outTris += outTrisPerVert;
-
-            }*/
-            int ringVertCount = Mathf.RoundToInt(2 * Mathf.PI * ring);
-            int ringVertOffset = GetVertexOffset(ring);
-            int nextRingVertCount = Mathf.RoundToInt(2 * Mathf.PI * (ring + 1));
+                for(int j = 0; j < segments; j++)
+                {
+                    int quadStartIndex = 4 * (i * segments + j);
+                    indices[quadStartIndex] = i * segments + j;
+                    indices[quadStartIndex + 1] = i * segments + j + 1;
+                    indices[quadStartIndex + 2] = (i + 1) * segments + j + 1;
+                    indices[quadStartIndex + 3] = (i + 1) * segments + j;
+                }
+            }
         }
-
-    }
-
-    int GetVertexOffset(int ringNum)
-    {
-        if(ringNum == 0)
+        else
         {
-            return 0;
+            indices = null;
         }
-        int offset = 1;
-        for(int ring = 1; ring <= ringNum; ring++)
-        {
-            offset += Mathf.RoundToInt(2 * Mathf.PI * (ring - 1));
-        }
-        return offset;
+        return indices;
     }
 
     // Return "X" error mesh.
-    Mesh GetErrorMesh(float scale)
+    void BuildErrorMesh(float scale)
     {
-        Mesh eMesh = new Mesh();
         Vector3[] vertices = new Vector3[4] {new Vector3(-scale, -scale, 0), new Vector3(scale, scale, 0),
                                              new Vector3(-scale, scale, 0), new Vector3(scale, -scale, 0)};
         int[] indices = new int[4] { 0, 1, 2, 3 };
-        eMesh.vertices = vertices;
-        eMesh.SetIndices(indices, MeshTopology.Lines, 0);
-        return eMesh;
+        mesh.vertices = vertices;
+        mesh.SetIndices(indices, MeshTopology.Lines, 0);
+        mesh.RecalculateBounds();
     }
 }
