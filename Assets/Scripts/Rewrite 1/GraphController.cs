@@ -7,19 +7,31 @@ public class GraphController : MonoBehaviour {
     public int vertsPerAxis = 5;
     public MeshTopology meshType = MeshTopology.Points;
     Mesh functMesh;
-    Function function;
+    public Function function;
+    float oldBound;
+    int oldVertsPerAxis;
+    MeshTopology oldMeshType;
+    Function oldFunction;
 
-	void Start () {
+    void Start () {
         functMesh = new Mesh();
         functMesh.vertices = new Vector3[] { Vector3.zero };
         GetComponent<MeshFilter>().mesh = functMesh;
+        oldBound = bound;
+        oldVertsPerAxis = vertsPerAxis;
+        oldMeshType = meshType;
 	}
 	
-	public void UpdateFunction(Function newFunct)
+    void Update()
     {
-        function = newFunct;
-        MeshBuilder.UpdateFunctionMesh(ref functMesh, function, bound, vertsPerAxis, meshType);
-
+        if(oldBound != bound || oldVertsPerAxis != vertsPerAxis || oldMeshType != meshType || oldFunction != function)
+        {
+            oldBound = bound;
+            oldVertsPerAxis = vertsPerAxis;
+            oldMeshType = meshType;
+            oldFunction = function;
+            MeshBuilder.UpdateFunctionMesh(ref functMesh, function, bound, vertsPerAxis, meshType);
+        }
     }
     
     public IEnumerator InitialUpdateFunction(Function newFunct)
@@ -29,6 +41,6 @@ public class GraphController : MonoBehaviour {
             Debug.Log("Mesh still null");
             yield return null;
         }
-        UpdateFunction(newFunct);
+        //UpdateFunction(newFunct);
     }
 }

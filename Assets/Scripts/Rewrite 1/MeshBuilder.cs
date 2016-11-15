@@ -1,5 +1,7 @@
 ﻿using UnityEngine;
 using org.mariuszgromada.math.mxparser;
+using System.Collections.Generic;
+using System;
 
 // Class for building graph meshes.
 public static class MeshBuilder {
@@ -7,13 +9,15 @@ public static class MeshBuilder {
     // Update the referenced mesh with geometry for the given function.
     public static void UpdateFunctionMesh(ref Mesh mesh, Function function, float bound, int vertsPerAxis, MeshTopology meshType)
     {
-        if (function.checkSyntax())
+        if (vertsPerAxis > 2 && bound > 0 && function.checkSyntax())
         {
-            Vector3[] verts = GetFunctionVertices(function, bound, vertsPerAxis);
+            Vector3[] verts = GetFunctionVertices(function, bound, vertsPerAxis, meshType);
             if(verts == null)
             {
                 Debug.Log("Verts null in UpdateFunctionMesh()");
             }
+            mesh.triangles = null;
+            mesh.normals = null;
             mesh.vertices = verts;
             mesh.SetIndices(GetFunctionIndices(bound, vertsPerAxis, function.getArgumentsNumber(), meshType), meshType, 0);
             mesh.RecalculateBounds();
@@ -24,12 +28,12 @@ public static class MeshBuilder {
         }
         else
         {
-            BuildErrorMesh(ref mesh);
+            BuildErrorMesh(ref mesh, bound / 2);
         }
     }
 
     // Get an array of vertex positions for a function mesh.
-    static Vector3[] GetFunctionVertices(Function function, float bound, int vertsPerAxis)
+    static Vector3[] GetFunctionVertices(Function function, float bound, int vertsPerAxis, MeshTopology meshType)
     {
         if(function.getArgumentsNumber() == 2)
         {
@@ -38,9 +42,17 @@ public static class MeshBuilder {
             {
                 verts[i].y = (float)function.calculate(verts[i].x, verts[i].z);
             }
-            if(verts == null)
+            if (verts == null)
             {
                 Debug.Log("null verts in GetFunctionVertices().");
+            }
+            // Double vertices for 2 sided face normals.
+            if (meshType == MeshTopology.Triangles || meshType == MeshTopology.Quads)
+            {
+                Vector3[] doubledVerts = new Vector3[verts.Length * 2];
+                verts.CopyTo(doubledVerts, 0);
+                verts.CopyTo(doubledVerts, verts.Length);
+                return doubledVerts;
             }
             return verts;
         }
@@ -83,9 +95,10 @@ public static class MeshBuilder {
     }
 
     // Build an "X" mesh to indicate an error.
-    static void BuildErrorMesh(ref Mesh mesh)
+    static void BuildErrorMesh(ref Mesh mesh, float scale)
     {
-        float scale = 1;
+        mesh.triangles = null;
+        mesh.normals = null;
         Vector3[] vertices = new Vector3[4] {new Vector3(-scale, -scale, 0), new Vector3(scale, scale, 0),
                                              new Vector3(-scale, scale, 0), new Vector3(scale, -scale, 0)};
         int[] indices = new int[4] { 0, 1, 2, 3 };
@@ -97,16 +110,64 @@ public static class MeshBuilder {
     // Get an array of vertex indices. This array defines the primitives of the mesh.
     static int[] GetFunctionIndices(float bound, int vertsPerAxis, int dimensions, MeshTopology meshType)
     {
-        if(dimensions == 2)
+        List<int> indices = new List<int>();
+        if (dimensions == 2)
         {
+            // Point indices.
             if(meshType == MeshTopology.Points)
             {
-                int[] indices = new int[vertsPerAxis * vertsPerAxis];
-                for(int i = 0; i < indices.Length; i++)
+                int vertCount = vertsPerAxis * vertsPerAxis;
+                for(int i = 0; i < vertCount; i++)
                 {
-                    indices[i] = i;
+                    indices.Add(i);
                 }
-                return indices;
+                return indices.ToArray();
+            }
+            // Wireframe indices.
+            else if(meshType == MeshTopology.Lines)
+            {
+                for(int i = 0; i < vertsPerAxis; i++)
+                {
+                    for(int j = 0; j < vertsPerAxis; j++)
+                    {
+                        int vertIndex = vertsPerAxis * i + j;
+                        if (j < vertsPerAxis - 1)
+                        {
+                            indices.Add(vertIndex);
+                            indices.Add(vertIndex + 1);
+                        }
+                        if(i < vertsPerAxis - 1)
+                        {
+                            indices.Add(vertIndex);
+                            indices.Add(vertIndex + vertsPerAxis);
+                        }
+                    }
+                }
+                return indices.ToArray();
+            }
+            // Quad indices.
+            else if (meshType == MeshTopology.Quads)
+            {
+                int uniqueVertCount = vertsPerAxis * vertsPerAxis;
+                for(int i = 0; i < vertsPerAxis - 1; i++)
+                {
+                    for(int j = 0; j < vertsPerAxis - 1; j++)
+                    {
+                        // Front face
+                        int vertIndex = vertsPerAxis * i + j;
+                        indices.Add(vertIndex);
+                        indices.Add(vertIndex + vertsPerAxis);
+                        indices.Add(vertIndex + vertsPerAxis + 1);
+                        indices.Add(vertIndex + 1);
+                        // Back face.
+                        vertIndex += uniqueVertCount;
+                        indices.Add(vertIndex);
+                        indices.Add(vertIndex + 1);
+                        indices.Add(vertIndex + 1 + vertsPerAxis);
+                        indices.Add(vertIndex + vertsPerAxis);
+                    }
+                }
+                return indices.ToArray();
             }
             else
             {
